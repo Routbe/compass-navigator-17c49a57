@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireAuth } from "@/lib/auth/middleware";
+import { optionalAuth, requireAuth } from "@/lib/auth/middleware";
 
 /** Public badge catalogue — same for every visitor, no auth required. */
 export const getBadgeCatalogue = createServerFn({ method: "GET" }).handler(async () => {
@@ -10,10 +10,15 @@ export const getBadgeCatalogue = createServerFn({ method: "GET" }).handler(async
 
 /** Public badge wall of any member — no PII, only catalogue rows + serials. */
 export const getPublicUserBadges = createServerFn({ method: "GET" })
-  .inputValidator((data: unknown) => z.object({ userId: z.string().min(1) }).parse(data))
-  .handler(async ({ data }) => {
+  .middleware([optionalAuth])
+  .inputValidator((data: unknown) => z.object({ userId: z.string().min(1).max(200) }).parse(data))
+  .handler(async ({ data, context }) => {
+    // `userId` is a sealed public reference (or the member's own id in Studio); raw ids of others are refused.
+    const { resolveOwnerRef } = await import("@/lib/auth/public-ref.server");
+    const owner = await resolveOwnerRef(data.userId, context.userId);
+    if (!owner) return [];
     const { fetchUserBadgesDb } = await import("./badges.server");
-    return fetchUserBadgesDb(data.userId);
+    return fetchUserBadgesDb(owner);
   });
 
 /** Badges the signed-in member has unlocked. */
