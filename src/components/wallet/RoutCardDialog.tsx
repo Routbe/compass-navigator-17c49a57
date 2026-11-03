@@ -17,7 +17,7 @@ import type { CardFinish, LiveRef, TiltRef, ZoomRef } from "./RoutCard3D";
 
 const RoutCard3D = lazy(() => import("./RoutCard3D"));
 
-type Card = ReturnType<typeof pickCardView<NonNullable<Awaited<ReturnType<typeof getWalletCard>>>>>;
+type Card = NonNullable<Awaited<ReturnType<typeof getWalletCard>>>;
 
 /** Any WebGL crash falls back to the CSS card instead of an empty dialog. */
 class GlBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
