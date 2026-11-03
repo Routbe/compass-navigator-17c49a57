@@ -21,7 +21,9 @@ export const getWalletCard = createServerFn({ method: "GET" })
     const base = walletOrigin();
     // Same-origin path for drawing the photo on a canvas without CORS taint.
     const avatarPath = card.heroImageUrl?.startsWith(base) ? card.heroImageUrl.slice(base.length) : null;
-    return { ...card, avatarPath };
+    const { pickCardView } = await import("./card-liveness");
+    // Allowlist, not a spread: only public card fields ever leave the server here.
+    return pickCardView({ ...card, avatarPath });
   });
 
 const cardRef = z.object({ handle: z.string().trim().min(1).max(100).regex(/^@?[\w.-]+$/), space: z.enum(["root", "alias"]).optional() });

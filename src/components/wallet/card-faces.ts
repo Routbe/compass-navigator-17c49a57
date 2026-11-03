@@ -74,7 +74,7 @@ function drawEmblem(ctx: CanvasRenderingContext2D, x: number, y: number, r: numb
   ctx.fill();
 }
 
-export async function drawCardFaces(card: WalletCardPayload & { avatarPath?: string | null }, opts: { sdfText?: boolean } = {}): Promise<CardFaces> {
+export async function drawCardFaces(card: Omit<WalletCardPayload, "heroImageUrl"> & { avatarPath?: string | null }, opts: { sdfText?: boolean } = {}): Promise<CardFaces> {
   const make = () => {
     const c = document.createElement("canvas");
     c.width = FACE_W;
