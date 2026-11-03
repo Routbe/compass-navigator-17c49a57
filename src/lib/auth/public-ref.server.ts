@@ -24,10 +24,10 @@ const unb64url = (s: string) => {
   return Uint8Array.from(atob(pad), (c) => c.charCodeAt(0));
 };
 
-async function refKey(secret: string): Promise<CryptoKey> {
+async function refKey(secret: string, purpose = "aes-gcm:v1"): Promise<CryptoKey> {
   const base = await crypto.subtle.importKey("raw", enc.encode(secret), "HKDF", false, ["deriveKey"]);
   return crypto.subtle.deriveKey(
-    { name: "HKDF", hash: "SHA-256", salt: enc.encode("rout-public-ref"), info: enc.encode("aes-gcm:v1") },
+    { name: "HKDF", hash: "SHA-256", salt: enc.encode("rout-public-ref"), info: enc.encode(purpose) },
     base,
     { name: "AES-GCM", length: 256 },
     false,
@@ -78,7 +78,13 @@ export async function openPublicRef(ref: string, secret: string | null = secretF
 /** Public profile rows: the internal id is replaced by a sealed reference before leaving the server. */
 export async function withPublicRef<T extends Record<string, unknown>>(row: T): Promise<T> {
   const id = row["id"];
-  return { ...row, id: typeof id === "string" ? await sealPublicRef(id) : null } as T;
+  return {
+    ...row,
+    id: typeof id === "string" ? await sealPublicRef(id) : null,
+    // Avatar paths start with the account id; seal them too.
+    ...("avatar_url" in row ? { avatar_url: await publicAvatarUrl(row["avatar_url"]) } : {}),
+    ...("favicon_url" in row ? { favicon_url: await publicAvatarUrl(row["favicon_url"]) } : {}),
+  } as T;
 }
 
 /**
@@ -90,4 +96,49 @@ export async function resolveOwnerRef(input: string, sessionUserId: string | nul
   if (isPublicRef(input)) return openPublicRef(input);
   if (sessionUserId && UUID.test(input) && input.toLowerCase() === sessionUserId.toLowerCase()) return sessionUserId;
   return null;
+}
+
+/**
+ * Sealed text for a purpose-bound URL token (fresh IV each call). `aad` binds the
+ * token to its context, e.g. the app it was issued to, so it cannot be replayed elsewhere.
+ */
+export async function sealText(plain: string, aad: string, secret: string | null = secretFromEnv()): Promise<string | null> {
+  if (!secret || plain.length > 2000) return null;
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(
+    await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: enc.encode(aad) }, await refKey(secret, "text:v1"), enc.encode(plain)),
+  );
+  const out = new Uint8Array(iv.length + ct.length);
+  out.set(iv);
+  out.set(ct, iv.length);
+  return b64url(out);
+}
+
+export async function openText(token: string, aad: string, secret: string | null = secretFromEnv()): Promise<string | null> {
+  if (!secret || !/^[A-Za-z0-9_-]{40,3000}$/.test(token)) return null;
+  try {
+    const raw = unb64url(token);
+    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: raw.slice(0, 12), additionalData: enc.encode(aad) }, await refKey(secret, "text:v1"), raw.slice(12));
+    return dec.decode(pt);
+  } catch {
+    return null;
+  }
+}
+
+const AVATAR_PATH = /^\/api\/public\/avatar\?path=([0-9a-f-]{36}\/[A-Za-z0-9._-]{1,120})$/;
+
+/** Avatar storage path inside a ROUT avatar URL (it starts with the account id), or null. */
+export function avatarPathOf(url: unknown): string | null {
+  if (typeof url !== "string") return null;
+  const m = AVATAR_PATH.exec(url.replace(/^https?:\/\/[^/]+/, "").replace("%2F", "/"));
+  return m ? m[1]! : null;
+}
+
+/** Rewrites a ROUT avatar URL so its account-id path is sealed; other URLs pass through unchanged. */
+export async function publicAvatarUrl(url: unknown): Promise<string | null> {
+  if (typeof url !== "string" || !url) return null;
+  const path = avatarPathOf(url);
+  if (!path) return url;
+  const token = await sealText(path, "avatar:public");
+  return token ? `/api/public/avatar?ref=${token}` : null;
 }
