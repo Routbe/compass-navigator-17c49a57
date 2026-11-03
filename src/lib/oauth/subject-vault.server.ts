@@ -4,7 +4,7 @@
  * public.oidc_subjects (unique per user + sector + version, and per sector + subject).
  * The raw account id is never returned, so it can never reach a JWT.
  */
-import { sql } from "@/lib/neon";
+import { sql, withDbContext } from "@/lib/neon";
 import { CURRENT_SUBJECT_VERSION, scopedSubject, sectorFor } from "./subject-vault";
 
 type SubjectClient = { clientId: string; subjectType: "public" | "pairwise"; sectorId: string | null };
@@ -18,6 +18,11 @@ function masterKey(): string {
 export type ScopedSubject = { sub: string; previousSub: string | null };
 
 export async function resolveScopedSubject(client: SubjectClient, userId: string): Promise<ScopedSubject> {
+  // Row-level rules only let the runtime role touch this member's own rows.
+  return withDbContext({ userId, workspaceId: null }, () => resolveInContext(client, userId));
+}
+
+async function resolveInContext(client: SubjectClient, userId: string): Promise<ScopedSubject> {
   const sector = sectorFor(client);
   const version = CURRENT_SUBJECT_VERSION;
   const subject = await scopedSubject(masterKey(), version, sector, userId);
