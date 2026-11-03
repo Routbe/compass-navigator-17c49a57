@@ -103,5 +103,12 @@
   "unverified": [
     "All 380 route files",
     "Live source visual equivalence"
-  ]
+  ],
+  "verification": {
+    "build": "build OK",
+    "tests": "17 tests passed across routing, gateway parser and documentation",
+    "scroll": "All five reveal groups visible with opacity 1 at page bottom on desktop and phone",
+    "console": "No page errors in homepage and sign-in rendering checks",
+    "staticFallbacks": "No media replacements introduced during repository import"
+  }
 }
