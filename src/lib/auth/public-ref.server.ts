@@ -40,7 +40,7 @@ function secretFromEnv(): string | null {
   return s.length >= 32 ? s : null;
 }
 
-export function isPublicRef(v: unknown): v is string {
+export function isPublicRef(v: unknown): boolean {
   return typeof v === "string" && v.startsWith(PREFIX) && v.length <= 200;
 }
 
