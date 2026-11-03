@@ -640,9 +640,13 @@ export async function exchangeAuthorizationCode(input: {
     }
   }
   const now = Math.floor(Date.now() / 1000);
+  const scoped = await subjectFor(client, userId, String(row["redirect_uri"]));
+  const subject = scoped.sub;
   const idToken = await signJwt({
     iss: issuer(),
-    sub: await subjectFor(client, userId, String(row["redirect_uri"])),
+    sub: subject,
+    // Key rotation: the app's previous subject for this member, so it can re-link once.
+    ...(scoped.previousSub ? { previous_sub: scoped.previousSub } : {}),
     aud: input.clientId,
     iat: now,
     exp: now + ttl,
@@ -654,7 +658,7 @@ export async function exchangeAuthorizationCode(input: {
   });
   const accessToken = await signJwt({
     iss: issuer(),
-    sub: await subjectFor(client, userId, String(row["redirect_uri"])),
+    sub: subject,
     aud: input.clientId,
     scope: scopes.join(" "),
     iat: now,
@@ -663,7 +667,6 @@ export async function exchangeAuthorizationCode(input: {
     jti: randomToken(16),
     ...(row["acr"] ? { acr: String(row["acr"]) } : {}),
   });
-  const subject = await subjectFor(client, userId, String(row["redirect_uri"]));
   let refreshToken: string | undefined;
   let familyId: string | null = null;
   if (scopes.includes("offline_access") && await hasConsent(userId, client.clientId, ["offline_access"])) {
@@ -686,7 +689,7 @@ export async function exchangeAuthorizationCode(input: {
   };
 }
 
-/** Claims volgens de toegestane scopes; `sub` blijft het interne gebruikers-id. */
+/** Claims volgens de toegestane scopes; `sub` komt altijd uit de subject-vault, nooit het interne id. */
 export async function identityClaims(
   userId: string,
   scopes: string[],
@@ -701,7 +704,9 @@ export async function identityClaims(
   if (scopes.includes("profile")) {
     claims["preferred_username"] = row["username"] ?? null;
     claims["name"] = row["display_name"] ?? null;
-    claims["picture"] = row["avatar_url"] ?? null;
+    // Per-app proxy URL: differs for every app, never carries the account id, dies with the consent.
+    const { appPictureUrl } = await import("./picture-proxy.server");
+    claims["picture"] = await appPictureUrl(row["avatar_url"], userId, opts.clientId ?? null, issuer());
   }
   const handle = routHandleClaim(Boolean(opts.handleSync), scopes, row["username"]);
   if (handle !== undefined) claims["rout_handle"] = handle;
@@ -1049,13 +1054,19 @@ export async function finishPasskeyStepUp(
   return "ok";
 }
 
-export async function subjectFor(client: OAuthClient, userId: string, redirectUri: string): Promise<string> {
-  if (client.subjectType === "public") return userId;
-  const sector = redirectSector(redirectUri);
-  if (!client.sectorId || client.sectorId !== sector) throw new OAuthError("invalid_client", "Pairwise sector klopt niet.");
-  const secret = process.env["ROUT_PROVIDER_PAIRWISE_SECRET"];
-  if (!secret || secret.length<32) throw new OAuthError("server_error", "Pairwise geheim ontbreekt.");
-  return pairwiseSubject(secret, sector, userId);
+/** Scoped subject for a token. Never the internal account id (see subject-vault.server.ts). */
+export async function subjectFor(client: OAuthClient, userId: string, redirectUri: string): Promise<{ sub: string; previousSub: string | null }> {
+  if (client.subjectType === "pairwise") {
+    const sector = redirectSector(redirectUri);
+    if (!client.sectorId || client.sectorId !== sector) throw new OAuthError("invalid_client", "Pairwise sector klopt niet.");
+  }
+  const { resolveScopedSubject } = await import("./subject-vault.server");
+  try {
+    return await resolveScopedSubject(client, userId);
+  } catch (error) {
+    console.error("[oauth] scoped subject failed", (error as Error)?.message);
+    throw new OAuthError("server_error", "Subject kon niet worden afgeleid.");
+  }
 }
 
 export async function authenticateOAuthClient(clientId: string, clientSecret: string | null, ip: string | null, confidential = false) {
