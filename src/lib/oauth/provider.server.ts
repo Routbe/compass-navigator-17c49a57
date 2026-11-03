@@ -704,7 +704,9 @@ export async function identityClaims(
   if (scopes.includes("profile")) {
     claims["preferred_username"] = row["username"] ?? null;
     claims["name"] = row["display_name"] ?? null;
-    claims["picture"] = row["avatar_url"] ?? null;
+    // Per-app proxy URL: differs for every app, never carries the account id, dies with the consent.
+    const { appPictureUrl } = await import("./picture-proxy.server");
+    claims["picture"] = await appPictureUrl(row["avatar_url"], userId, opts.clientId ?? null, issuer());
   }
   const handle = routHandleClaim(Boolean(opts.handleSync), scopes, row["username"]);
   if (handle !== undefined) claims["rout_handle"] = handle;
