@@ -58,13 +58,16 @@ export async function introspectOAuthToken(token: string, clientId: string) {
     return { active: true, client_id: clientId, sub: verified.sub, scope: verified.scopes.join(" "), token_type: "Bearer", iss: issuer(),
       exp: Math.floor(new Date(String(row["expires_at"])).getTime()/1000), iat: Math.floor(new Date(String(row["created_at"])).getTime()/1000) };
   } catch {
-    const rows = await sql`select r.subject,r.scopes,r.expires_at from public.oauth_refresh_tokens r
+    const rows = await sql`select r.user_id,r.scopes,r.expires_at from public.oauth_refresh_tokens r
       join public.oauth_clients c on c.client_id=r.client_id join public.users u on u.id=r.user_id
       join public.oauth_consents g on g.client_id=r.client_id and g.user_id=r.user_id
       where r.token_hash=${await sha256Base64Url(token)} and r.client_id=${clientId} and r.used_at is null and r.revoked_at is null
         and r.expires_at>now() and c.status='active' and not u.is_disabled and u.account_status='active' and g.revoked_at is null
         and not exists(select 1 from public.oauth_refresh_tokens f where f.family_id=r.family_id and f.revoked_at is not null) limit 1`;
     const row = rows[0];
-    return row ? { active: true, client_id: clientId, sub: String(row["subject"]), scope: (row["scopes"] as string[]).join(" "), token_type: "refresh_token", exp: Math.floor(new Date(String(row["expires_at"])).getTime()/1000) } : { active: false };
+    if (!row) return { active: false };
+    const { scopedSubjectForClientId } = await import("./subject-vault.server");
+    const sub = await scopedSubjectForClientId(String(row["user_id"]), clientId);
+    return { active: true, client_id: clientId, sub, scope: (row["scopes"] as string[]).join(" "), token_type: "refresh_token", exp: Math.floor(new Date(String(row["expires_at"])).getTime()/1000) };
   }
 }
