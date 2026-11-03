@@ -1,16 +1,19 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useServerFn } from "@tanstack/react-start";
-import { Loader2, RotateCw, Smartphone, UserPlus, Wallet } from "lucide-react";
+import { Loader2, RotateCw, ShieldCheck, Smartphone, UserPlus, Wallet, ZoomIn, ZoomOut } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { filterGyro } from "./card-physics";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { downloadVCard } from "@/lib/vcard";
-import { getWalletCard, getWalletStatus } from "@/lib/wallet/wallet.functions";
+import { getCardLiveness, getWalletCard, getWalletStatus, verifyCardLiveCode } from "@/lib/wallet/wallet.functions";
+import { pickCardView } from "@/lib/wallet/card-liveness";
 import type { WalletStatus } from "@/lib/wallet/wallet-pass";
 import { drawCardFaces, hasWebGL, type CardFaces } from "./card-faces";
-import type { CardFinish, TiltRef } from "./RoutCard3D";
+import type { CardFinish, LiveRef, TiltRef, ZoomRef } from "./RoutCard3D";
 
 const RoutCard3D = lazy(() => import("./RoutCard3D"));
 
@@ -66,34 +69,71 @@ export function RoutCardDialog({ open, onOpenChange, handle, space }: { open: bo
   const [gyro, setGyro] = useState(false);
   const tilt: TiltRef = useRef({ x: 0, y: 0, at: 0 });
   const [flatTilt, setFlatTilt] = useState({ x: 0, y: 0 });
+  const live: LiveRef = useRef({ seed: [0.5, 0.5, 0.5, 0.5], expiresAt: 0, windowMs: 30_000 });
+  const zoom: ZoomRef = useRef(0);
+  const [zoomed, setZoomed] = useState(false);
+  const [code, setCode] = useState<string | null>(null);
+  const [verifyInput, setVerifyInput] = useState("");
+  const [verdict, setVerdict] = useState<"valid" | "invalid" | "limited" | null>(null);
+  const loadLive = useServerFn(getCardLiveness);
+  const verifyLive = useServerFn(verifyCardLiveCode);
 
   useEffect(() => {
     if (!open || card !== undefined) return;
     setWebgl(hasWebGL());
-    loadCard({ data: { handle, space } }).then(setCard).catch(() => setCard(null));
+    // Privacy filter: only public card fields reach the 3D card.
+    loadCard({ data: { handle, space } }).then((c) => setCard(c ? pickCardView(c) : null)).catch(() => setCard(null));
     loadStatus().then(setStatus).catch(() => setStatus({ apple: false, google: false }));
   }, [open, card, handle, space, loadCard, loadStatus]);
 
   useEffect(() => {
-    if (!card) return;
+    if (!card || webgl === null) return;
     let alive = true;
     setFinish(defaultFinish(card.hexForegroundColor));
-    void drawCardFaces(card).then((f) => {
+    // WebGL draws names as SDF text; the CSS fallback keeps them printed.
+    void Promise.all([drawCardFaces(card, { sdfText: webgl }), drawCardFaces(card)]).then(([gl, flat]) => {
       if (!alive) return;
-      setFaces(f);
-      setImages({ front: f.front.toDataURL("image/png"), back: f.back.toDataURL("image/png") });
+      setFaces(gl);
+      setImages({ front: flat.front.toDataURL("image/png"), back: flat.back.toDataURL("image/png") });
     });
+    if (!webgl) console.warn("[rout-card] WebGL unavailable: showing the CSS card without optical security layers.");
     return () => {
       alive = false;
     };
-  }, [card]);
+  }, [card, webgl]);
+
+  // Live proof-of-now: new seed (and the owner's code) every server window.
+  useEffect(() => {
+    if (!open || !card) return;
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = async () => {
+      try {
+        const r = await loadLive({ data: { handle, space } });
+        if (!alive || !r) return;
+        const skew = Date.now() - r.serverNow;
+        live.current = { seed: r.seed, expiresAt: r.expiresAt + skew, windowMs: 30_000 };
+        setCode(r.code);
+        timer = setTimeout(() => void tick(), Math.max(1000, r.expiresAt + skew - Date.now() + 250));
+      } catch {
+        if (alive) timer = setTimeout(() => void tick(), 10_000);
+      }
+    };
+    void tick();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [open, card, handle, space, loadLive]);
 
   // Gyroscope tilt (after the visitor allowed motion access on iOS).
   useEffect(() => {
     if (!open || !gyro) return;
     const onTilt = (e: DeviceOrientationEvent) => {
-      const x = Math.max(-1, Math.min(1, (e.gamma ?? 0) / 35));
-      const y = Math.max(-1, Math.min(1, ((e.beta ?? 45) - 45) / 35));
+      const prev = tilt.current;
+      const dt = Math.min(0.1, (performance.now() - prev.at) / 1000 || 1 / 60);
+      const x = filterGyro(prev.x, Math.max(-1, Math.min(1, (e.gamma ?? 0) / 35)), dt);
+      const y = filterGyro(prev.y, Math.max(-1, Math.min(1, ((e.beta ?? 45) - 45) / 35)), dt);
       tilt.current = { x, y, at: performance.now() };
       setFlatTilt({ x, y });
     };
@@ -126,6 +166,23 @@ export function RoutCardDialog({ open, onOpenChange, handle, space }: { open: bo
   const flip = () => {
     tilt.current = { ...tilt.current, at: performance.now() };
     setFlipped((v) => !v);
+  };
+
+  const toggleZoom = () => {
+    const next = !zoomed;
+    zoom.current = next ? 1 : 0;
+    tilt.current = { ...tilt.current, at: performance.now() };
+    setZoomed(next);
+  };
+
+  const checkCode = async () => {
+    setVerdict(null);
+    try {
+      const r = await verifyLive({ data: { handle, space, code: verifyInput } });
+      setVerdict(r.limited ? "limited" : r.valid ? "valid" : "invalid");
+    } catch {
+      setVerdict("invalid");
+    }
   };
 
   const addGoogle = async () => {
@@ -198,7 +255,17 @@ export function RoutCardDialog({ open, onOpenChange, handle, space }: { open: bo
           ) : webgl ? (
             <GlBoundary fallback={<div className="flex h-full items-center p-4">{flat}</div>}>
               <Suspense fallback={<div className="flex h-full items-center p-4">{flat}</div>}>
-                <RoutCard3D faces={faces} finish={finish} flipped={flipped} tilt={tilt} onFlip={flip} onReady={() => setReady(true)} />
+                <RoutCard3D
+                  faces={faces}
+                  finish={finish}
+                  flipped={flipped}
+                  tilt={tilt}
+                  live={live}
+                  zoom={zoom}
+                  onFlip={flip}
+                  onReady={() => setReady(true)}
+                  text={{ displayName: card!.displayName, handle: card!.handle, subheader: card!.subheader, fg: card!.hexForegroundColor, sovereignId: card!.sovereignId, code }}
+                />
               </Suspense>
             </GlBoundary>
           ) : (
@@ -223,8 +290,49 @@ export function RoutCardDialog({ open, onOpenChange, handle, space }: { open: bo
 
         <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
           <Button type="button" size="sm" variant="ghost" className="gap-1.5" onClick={flip}><RotateCw className="h-3.5 w-3.5" aria-hidden /> {t("card.flip")}</Button>
+          {webgl && faces && (
+            <Button type="button" size="sm" variant="ghost" className="gap-1.5" onClick={toggleZoom} aria-pressed={zoomed}>
+              {zoomed ? <ZoomOut className="h-3.5 w-3.5" aria-hidden /> : <ZoomIn className="h-3.5 w-3.5" aria-hidden />} {t("card.zoom", { defaultValue: "Loep" })}
+            </Button>
+          )}
           {!gyro && <Button type="button" size="sm" variant="ghost" className="gap-1.5" onClick={() => void enableGyro()}><Smartphone className="h-3.5 w-3.5" aria-hidden /> {t("card.gyro")}</Button>}
         </div>
+
+        {card && (
+          <div className="rounded-2xl border border-border p-3">
+            {code ? (
+              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                <ShieldCheck className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+                {t("card.liveOwner", { defaultValue: "Je live-code staat op de achterkant en wisselt elke 30 seconden. Een screenshot is dus snel ongeldig." })}
+              </p>
+            ) : (
+              <form
+                className="grid gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void checkCode();
+                }}
+              >
+                <label htmlFor="rout-live-code" className="flex items-center gap-2 text-xs font-medium">
+                  <ShieldCheck className="h-4 w-4 text-primary" aria-hidden /> {t("card.verifyLabel", { defaultValue: "Echtheid controleren: vraag de live-code op de achterkant" })}
+                </label>
+                <div className="flex gap-2">
+                  <Input id="rout-live-code" value={verifyInput} onChange={(e) => { setVerifyInput(e.target.value); setVerdict(null); }} maxLength={12} autoComplete="off" spellCheck={false} placeholder="ABC 123" className="h-9 font-mono uppercase tracking-widest" />
+                  <Button type="submit" size="sm" variant="outline" className="h-9" disabled={verifyInput.trim().length < 6}>{t("card.verify", { defaultValue: "Controleer" })}</Button>
+                </div>
+                {verdict && (
+                  <p role="status" className={cn("text-xs", verdict === "valid" ? "text-primary" : "text-destructive")}>
+                    {verdict === "valid"
+                      ? t("card.verifyValid", { defaultValue: "Echt: deze code komt van de kaarthouder, nu." })
+                      : verdict === "limited"
+                        ? t("card.verifyLimited", { defaultValue: "Te veel pogingen. Probeer het over een paar minuten opnieuw." })
+                        : t("card.verifyInvalid", { defaultValue: "Niet geldig of verlopen. Vraag de huidige code." })}
+                  </p>
+                )}
+              </form>
+            )}
+          </div>
+        )}
 
         <div className="grid gap-2">
           <Button
