@@ -345,6 +345,7 @@ import { Route as ApiPublicLastfmHandleRouteImport } from './routes/api_.public.
 import { Route as ApiPublicMastodonServersRouteImport } from './routes/api_.public.mastodon.servers'
 import { Route as ApiPublicMastodonStartRouteImport } from './routes/api_.public.mastodon.start'
 import { Route as ApiPublicOauthIntrospectRouteImport } from './routes/api_.public.oauth.introspect'
+import { Route as ApiPublicOauthPictureRouteImport } from './routes/api_.public.oauth.picture'
 import { Route as ApiPublicOauthRevokeRouteImport } from './routes/api_.public.oauth.revoke'
 import { Route as ApiPublicOauthTokenRouteImport } from './routes/api_.public.oauth.token'
 import { Route as ApiPublicOauthUserinfoRouteImport } from './routes/api_.public.oauth.userinfo'
@@ -2149,6 +2150,11 @@ const ApiPublicOauthIntrospectRoute =
     path: '/api/public/oauth/introspect',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicOauthPictureRoute = ApiPublicOauthPictureRouteImport.update({
+  id: '/api_/public/oauth/picture',
+  path: '/api/public/oauth/picture',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicOauthRevokeRoute = ApiPublicOauthRevokeRouteImport.update({
   id: '/api_/public/oauth/revoke',
   path: '/api/public/oauth/revoke',
@@ -2718,6 +2724,7 @@ export interface FileRoutesByFullPath {
   '/api/public/mastodon/servers': typeof ApiPublicMastodonServersRoute
   '/api/public/mastodon/start': typeof ApiPublicMastodonStartRoute
   '/api/public/oauth/introspect': typeof ApiPublicOauthIntrospectRoute
+  '/api/public/oauth/picture': typeof ApiPublicOauthPictureRoute
   '/api/public/oauth/revoke': typeof ApiPublicOauthRevokeRoute
   '/api/public/oauth/token': typeof ApiPublicOauthTokenRoute
   '/api/public/oauth/userinfo': typeof ApiPublicOauthUserinfoRoute
@@ -3079,6 +3086,7 @@ export interface FileRoutesByTo {
   '/api/public/mastodon/servers': typeof ApiPublicMastodonServersRoute
   '/api/public/mastodon/start': typeof ApiPublicMastodonStartRoute
   '/api/public/oauth/introspect': typeof ApiPublicOauthIntrospectRoute
+  '/api/public/oauth/picture': typeof ApiPublicOauthPictureRoute
   '/api/public/oauth/revoke': typeof ApiPublicOauthRevokeRoute
   '/api/public/oauth/token': typeof ApiPublicOauthTokenRoute
   '/api/public/oauth/userinfo': typeof ApiPublicOauthUserinfoRoute
@@ -3459,6 +3467,7 @@ export interface FileRoutesById {
   '/api_/public/mastodon/servers': typeof ApiPublicMastodonServersRoute
   '/api_/public/mastodon/start': typeof ApiPublicMastodonStartRoute
   '/api_/public/oauth/introspect': typeof ApiPublicOauthIntrospectRoute
+  '/api_/public/oauth/picture': typeof ApiPublicOauthPictureRoute
   '/api_/public/oauth/revoke': typeof ApiPublicOauthRevokeRoute
   '/api_/public/oauth/token': typeof ApiPublicOauthTokenRoute
   '/api_/public/oauth/userinfo': typeof ApiPublicOauthUserinfoRoute
@@ -3839,6 +3848,7 @@ export interface FileRouteTypes {
     | '/api/public/mastodon/servers'
     | '/api/public/mastodon/start'
     | '/api/public/oauth/introspect'
+    | '/api/public/oauth/picture'
     | '/api/public/oauth/revoke'
     | '/api/public/oauth/token'
     | '/api/public/oauth/userinfo'
@@ -4200,6 +4210,7 @@ export interface FileRouteTypes {
     | '/api/public/mastodon/servers'
     | '/api/public/mastodon/start'
     | '/api/public/oauth/introspect'
+    | '/api/public/oauth/picture'
     | '/api/public/oauth/revoke'
     | '/api/public/oauth/token'
     | '/api/public/oauth/userinfo'
@@ -4579,6 +4590,7 @@ export interface FileRouteTypes {
     | '/api_/public/mastodon/servers'
     | '/api_/public/mastodon/start'
     | '/api_/public/oauth/introspect'
+    | '/api_/public/oauth/picture'
     | '/api_/public/oauth/revoke'
     | '/api_/public/oauth/token'
     | '/api_/public/oauth/userinfo'
@@ -4805,6 +4817,7 @@ export interface RootRouteChildren {
   ApiPublicMastodonServersRoute: typeof ApiPublicMastodonServersRoute
   ApiPublicMastodonStartRoute: typeof ApiPublicMastodonStartRoute
   ApiPublicOauthIntrospectRoute: typeof ApiPublicOauthIntrospectRoute
+  ApiPublicOauthPictureRoute: typeof ApiPublicOauthPictureRoute
   ApiPublicOauthRevokeRoute: typeof ApiPublicOauthRevokeRoute
   ApiPublicOauthTokenRoute: typeof ApiPublicOauthTokenRoute
   ApiPublicOauthUserinfoRoute: typeof ApiPublicOauthUserinfoRoute
@@ -7181,6 +7194,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicOauthIntrospectRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api_/public/oauth/picture': {
+      id: '/api_/public/oauth/picture'
+      path: '/api/public/oauth/picture'
+      fullPath: '/api/public/oauth/picture'
+      preLoaderRoute: typeof ApiPublicOauthPictureRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api_/public/oauth/revoke': {
       id: '/api_/public/oauth/revoke'
       path: '/api/public/oauth/revoke'
@@ -8230,6 +8250,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicMastodonServersRoute: ApiPublicMastodonServersRoute,
   ApiPublicMastodonStartRoute: ApiPublicMastodonStartRoute,
   ApiPublicOauthIntrospectRoute: ApiPublicOauthIntrospectRoute,
+  ApiPublicOauthPictureRoute: ApiPublicOauthPictureRoute,
   ApiPublicOauthRevokeRoute: ApiPublicOauthRevokeRoute,
   ApiPublicOauthTokenRoute: ApiPublicOauthTokenRoute,
   ApiPublicOauthUserinfoRoute: ApiPublicOauthUserinfoRoute,
