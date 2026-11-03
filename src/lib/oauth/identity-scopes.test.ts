@@ -51,12 +51,14 @@ beforeEach(() => {
 
 describe("identifier layers", () => {
   it("App A and App B get different pairwise subjects for the same user", async () => {
-    const { getPairwiseSubject } = await import("@/lib/auth/oidc-identifiers.server");
-    const a = await getPairwiseSubject("user-1", "app-a");
-    const b = await getPairwiseSubject("user-1", "app-b");
+    // Subjects come from the HKDF vault (see subject-vault.test.ts for the full rules).
+    const { scopedSubject } = await import("./subject-vault");
+    const uid = "123e4567-e89b-12d3-a456-426614174000";
+    const a = await scopedSubject("m".repeat(64), 2, "client:app-a", uid);
+    const b = await scopedSubject("m".repeat(64), 2, "client:app-b", uid);
     expect(a).not.toBe(b);
-    expect(a).not.toContain("user-1");
-    expect(await getPairwiseSubject("user-1", "app-a")).toBe(a);
+    expect(a).not.toContain(uid);
+    expect(await scopedSubject("m".repeat(64), 2, "client:app-a", uid)).toBe(a);
   });
   it("sybil nullifier is stable within App A and differs from App B", async () => {
     const { getAppSybilNullifier } = await import("@/lib/auth/oidc-identifiers.server");
