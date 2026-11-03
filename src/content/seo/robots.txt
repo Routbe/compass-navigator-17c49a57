@@ -1,0 +1,51 @@
+# ROUT — search engines and AI crawlers are welcome on public pages.
+User-agent: *
+Allow: /
+Disallow: /dashboard/
+Disallow: /studio/
+Disallow: /api/internal/
+Disallow: /connect/
+
+User-agent: Googlebot
+Allow: /
+Disallow: /dashboard/
+Disallow: /studio/
+Disallow: /api/internal/
+Disallow: /connect/
+
+User-agent: Bingbot
+Allow: /
+Disallow: /dashboard/
+Disallow: /studio/
+Disallow: /api/internal/
+Disallow: /connect/
+
+User-agent: GPTBot
+Allow: /
+Disallow: /dashboard/
+Disallow: /studio/
+Disallow: /api/internal/
+Disallow: /connect/
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /dashboard/
+Disallow: /studio/
+Disallow: /api/internal/
+Disallow: /connect/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /dashboard/
+Disallow: /studio/
+Disallow: /api/internal/
+Disallow: /connect/
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+Host: https://rout.be
+Sitemap: https://rout.be/sitemap.xml

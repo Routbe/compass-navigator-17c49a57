@@ -1,17 +1,55 @@
+import { CommandPalette } from "@/components/CommandPalette";
+import { TourHost } from "@/components/tour/TourHost";
+import { InAppBrowserBanner } from "@/components/pwa/InAppBrowserBanner";
+import { IosInstallHint } from "@/components/pwa/IosInstallHint";
+import { StepUpDialog } from "@/components/auth/StepUpDialog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
   createRootRouteWithContext,
   useRouter,
-  HeadContent,
   Scripts,
-  type ErrorComponentProps,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import { BrandedHeadContent } from "@/components/seo/BrandedHeadContent";
+import { SEO_KEYWORDS, knowledgeGraphScripts } from "@/lib/knowledge-graph";
+import { BRAND } from "@/lib/page-title";
+import { useRouterState } from "@tanstack/react-router";
+import { DevModeToggle } from "@/components/DevModeToggle";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { ThemeProvider } from "@/hooks/useTheme";
+import { I18nProvider } from "@/lib/i18n";
+import { AuthProvider } from "@/hooks/useAuth";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { ErrorBoundary, StaleChunkReload, willAutoReload } from "@/components/ErrorBoundary";
+import { LanguageSync } from "@/components/LanguageSync";
+import "@/lib/env";
+import { notFound, redirect } from "@tanstack/react-router";
+import { appMode, detectShellMode, isAdminMode, isAdminPath, isModeFixed, modeDecision } from "@/lib/app-mode";
+
+// Shells load lazily; the public build statically drops the admin shell (dead branch), so no admin code leaks.
+const PublicAppShell = lazy(() => import("@/components/shells/PublicAppShell"));
+const AdminAppShell =
+  import.meta.env["VITE_APP_MODE"] === "public" ? null : lazy(() => import("@/components/shells/AdminAppShell"));
+
+function ShellSwitch({ children }: { children: ReactNode }) {
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const [previewAdminAuth, setPreviewAdminAuth] = useState(false);
+  useEffect(() => {
+    setPreviewAdminAuth(!isModeFixed() && path.startsWith("/auth") && detectShellMode() === "admin");
+  }, [path]);
+  const Shell = AdminAppShell && (isAdminMode() || isAdminPath(path) || previewAdminAuth) ? AdminAppShell : PublicAppShell;
+  return (
+    <Suspense fallback={null}>
+      <Shell>{children}</Shell>
+    </Suspense>
+  );
+}
 
 function NotFoundComponent() {
   return (
@@ -35,13 +73,15 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: ErrorComponentProps) {
+function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+  const [stale] = useState(() => willAutoReload(error));
   console.error(error);
   const router = useRouter();
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
 
+  if (stale) return <StaleChunkReload error={error} />;
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
@@ -74,27 +114,58 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  // Same split-brain decision as the server middleware, so client navigation obeys it too.
+  beforeLoad: ({ location }) => {
+    const d = modeDecision(appMode(), location.pathname);
+    if (d.kind === "notFound") throw notFound();
+    if (d.kind === "redirect") throw redirect({ href: d.to });
+  },
   head: () => ({
     meta: [
+      ...(isAdminMode() ? [{ name: "robots", content: "noindex, nofollow" }] : []),
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { name: "viewport", content: "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" },
+      { title: BRAND },
+      {
+        name: "description",
+        content:
+          "ROUT is het soevereine besturingssysteem voor je digitale identiteit: één geverifieerde identiteit, privé-relais, Login met ROUT en routing aan de edge. Open source en Europees.",
+      },
+      { name: "author", content: "ROUT" },
+      { name: "keywords", content: SEO_KEYWORDS.join(", ") },
+      { property: "og:title", content: BRAND },
+      {
+        property: "og:description",
+        content:
+          "ROUT is het soevereine besturingssysteem voor je digitale identiteit: één geverifieerde identiteit, privé-relais, Login met ROUT en routing aan de edge. Open source en Europees.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
+      // Statusbalk van de browser volgt de huisstijl, licht én donker.
+      // Light variant is rendered in RootShell: head() keeps only one tag per name.
+      { name: "theme-color", content: "#0B0B0C", media: "(prefers-color-scheme: dark)" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-title", content: "ROUT" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "application-name", content: "ROUT" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+      { rel: "icon", href: "/favicon.png", type: "image/png" },
+      { rel: "icon", href: "/favicon.ico", sizes: "any" },
+      { rel: "icon", href: "/icon-192.png", type: "image/png", sizes: "192x192" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png", sizes: "180x180" },
     ],
+    // Knowledge graph for search engines and AI crawlers; dropped on member pages by BrandedHeadContent.
+    scripts: isAdminMode() ? [] : knowledgeGraphScripts(),
   }),
+
   shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
@@ -103,9 +174,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    // Het thema-effect (useTheme) zet na hydratie class/colorScheme op <html>;
+    // suppressHydrationWarning voorkomt een loze React-waarschuwing daarover.
+    <html lang="en" suppressHydrationWarning>
       <head>
-        <HeadContent />
+        <BrandedHeadContent />
+        {/* After the route tags, so a page accent colour (no media) still wins. */}
+        <meta name="theme-color" content="#FAFAFA" media="(prefers-color-scheme: light)" />
       </head>
       <body>
         {children}
@@ -117,11 +192,43 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
+
+  useEffect(() => {
+    // Offline registration is disabled until a service worker is configured here.
+    // Remove historical tracking storage; any new attribution stays in memory.
+    void import("@/lib/referral").then((m) => { m.clearReferrer(); m.captureReferralFromUrl(); });
+    // Preview/dev: a chosen admin shell opens the portal from the home page.
+    if (!isModeFixed() && window.location.pathname === "/" && detectShellMode() === "admin") {
+      void router.navigate({ to: "/admin" } as never);
+    }
+  }, [router]);
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <ThemeProvider>
+        <I18nProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <StepUpDialog />
+            <AuthProvider>
+              <LanguageSync />
+              <ErrorBoundary>
+                  {/* Required: nested routes render here. */}
+                  <ShellSwitch>
+                    <Outlet />
+                  </ShellSwitch>
+                  <DevModeToggle />
+                  <CommandPalette />
+                  <TourHost />
+                  <InAppBrowserBanner />
+                  <IosInstallHint />
+              </ErrorBoundary>
+            </AuthProvider>
+          </TooltipProvider>
+        </I18nProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
