@@ -33,3 +33,18 @@ describe("public owner references", () => {
     await expect(resolveOwnerRef(ID, "00000000-0000-4000-8000-000000000000")).resolves.toBeNull();
   });
 });
+
+describe("sealed photo links", () => {
+  it("binds a token to its app: another app cannot open it", async () => {
+    const { sealText, openText } = await import("./public-ref.server");
+    const t = (await sealText("path", "picture:app-a", KEY))!;
+    await expect(openText(t, "picture:app-a", KEY)).resolves.toBe("path");
+    await expect(openText(t, "picture:app-b", KEY)).resolves.toBeNull();
+  });
+
+  it("finds the account-id path inside a ROUT avatar link only", async () => {
+    const { avatarPathOf } = await import("./public-ref.server");
+    expect(avatarPathOf(`/api/public/avatar?path=${ID}/a.webp`)).toBe(`${ID}/a.webp`);
+    expect(avatarPathOf("https://cdn.example/a.png")).toBeNull();
+  });
+});

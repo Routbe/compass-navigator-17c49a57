@@ -77,7 +77,8 @@ export async function generateWalletPayload(
         displayName: (p["display_name"] as string | null) ?? null,
         tagline: (p["tagline"] as string | null) ?? null,
         themeBg: themeOf(String(p["theme"] ?? "")).bg,
-        avatarSrc: profileImageSrc((p["avatar_url"] as string | null) ?? null),
+        // Avatar paths start with the account id: the pass gets the sealed form.
+        avatarSrc: profileImageSrc(await (await import("@/lib/auth/public-ref.server")).publicAvatarUrl(p["avatar_url"])),
       },
       base,
       ...(await (async () => {
