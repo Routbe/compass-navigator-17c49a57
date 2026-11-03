@@ -1,0 +1,114 @@
+{
+  "source": "https://github.com/maximilienbrussels/compass-navigator-67.git",
+  "commit": "9266eac51aeacd437c9b97fa1987d7dde0a7c107",
+  "importType": "full repository source",
+  "checks": [
+    {
+      "route": "/",
+      "viewport": [
+        1280,
+        1800
+      ],
+      "trigger": "Open menu",
+      "expected": "Tools and infrastructure navigation",
+      "observed": "Close\nPlatform\n\nTOOLS\n\nQR generator\nFast standalone studio\nProfile studio\nSovereign link-in-bio & micro-site builder\nCalendar and bookings\nLinked and sovereign booking pages\nBatch generator\nBulk QR generation\nDynamic links and analytics\nTrackable short links\n\nINFRASTRUCTURE\n\nCustom domains\nDNS & CNAME configuration\nDeveloper console\nManage apps, API keys & infrastructure\nOpen source and documentation\nAGPLv3 & protocol\nNL\nEN\nFR\nDE",
+      "status": "passed",
+      "screenshot": "menu-1280.png"
+    },
+    {
+      "route": "/",
+      "viewport": [
+        1280,
+        1800
+      ],
+      "trigger": "Explore the OS",
+      "expected": "Ecosystem section",
+      "status": "passed",
+      "screenshot": "ecosystem-1280.png"
+    },
+    {
+      "route": "/",
+      "viewport": [
+        1280,
+        1800
+      ],
+      "trigger": "/studio suggestion then Enter",
+      "expected": "Studio sign-in gate",
+      "observedUrl": "http://localhost:8080/auth/sign-in",
+      "status": "passed"
+    },
+    {
+      "route": "/auth/sign-in",
+      "viewport": [
+        1280,
+        1800
+      ],
+      "trigger": "Sign in with password",
+      "expected": "Password input",
+      "status": "passed",
+      "screenshot": "password-1280.png"
+    },
+    {
+      "route": "/",
+      "viewport": [
+        390,
+        844
+      ],
+      "trigger": "Open menu",
+      "expected": "Tools and infrastructure navigation",
+      "observed": "Close\nPlatform\n\nTOOLS\n\nQR generator\nFast standalone studio\nProfile studio\nSovereign link-in-bio & micro-site builder\nCalendar and bookings\nLinked and sovereign booking pages\nBatch generator\nBulk QR generation\nDynamic links and analytics\nTrackable short links\n\nINFRASTRUCTURE\n\nCustom domains\nDNS & CNAME configuration\nDeveloper console\nManage apps, API keys & infrastructure\nOpen source and documentation\nAGPLv3 & protocol\nNL\nEN\nFR\nDE",
+      "status": "passed",
+      "screenshot": "menu-390.png"
+    },
+    {
+      "route": "/",
+      "viewport": [
+        390,
+        844
+      ],
+      "trigger": "Explore the OS",
+      "expected": "Ecosystem section",
+      "status": "passed",
+      "screenshot": "ecosystem-390.png"
+    },
+    {
+      "route": "/",
+      "viewport": [
+        390,
+        844
+      ],
+      "trigger": "/studio suggestion then Enter",
+      "expected": "Studio sign-in gate",
+      "observedUrl": "http://localhost:8080/auth/sign-in",
+      "status": "passed"
+    },
+    {
+      "route": "/auth/sign-in",
+      "viewport": [
+        390,
+        844
+      ],
+      "trigger": "Sign in with password",
+      "expected": "Password input",
+      "status": "passed",
+      "screenshot": "password-390.png"
+    }
+  ],
+  "sourceComparison": "Not applicable: repository source import, no live website supplied",
+  "blocked": [
+    "Account creation and sign-in need the source database and auth configuration",
+    "Existing data and email/payment/OAuth services were not transferred",
+    "Standalone worker needs separate deployment"
+  ],
+  "unverified": [
+    "All 380 route files",
+    "Live source visual equivalence"
+  ],
+  "verification": {
+    "build": "build OK",
+    "tests": "17 tests passed across routing, gateway parser and documentation",
+    "scroll": "All five reveal groups visible with opacity 1 at page bottom on desktop and phone",
+    "console": "No page errors in homepage and sign-in rendering checks",
+    "staticFallbacks": "No media replacements introduced during repository import"
+  }
+}
