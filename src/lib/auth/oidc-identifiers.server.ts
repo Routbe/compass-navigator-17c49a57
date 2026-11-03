@@ -8,25 +8,16 @@ import { disclosedSensitive, nationalIdDecision, splitLegalName, tierAllows, typ
 
 type Row = Record<string, unknown>;
 
-function pairwiseSecret(): string {
-  const s = process.env["ROUT_PROVIDER_PAIRWISE_SECRET"] ?? "";
-  if (s.length < 32) throw new Error("pairwise_secret_missing");
-  return s;
-}
-
 function sybilPepper(): string {
   const s = process.env["ROUT_SYBIL_PEPPER"] ?? "";
   if (s.length < 32) throw new Error("sybil_pepper_missing");
   return s;
 }
 
-/** Same subject the tokens carry: pairwise per sector for pairwise clients, else per client id. */
+/** Same subject the tokens carry: always the scoped subject from the vault. */
 export async function getPairwiseSubject(userId: string, clientId: string): Promise<string> {
-  const { getClientByClientId } = await import("@/lib/oauth/provider.server");
-  const { pairwiseSubject } = await import("@/lib/oauth/subject");
-  const client = await getClientByClientId(clientId);
-  const sector = client?.subjectType === "pairwise" && client.sectorId ? client.sectorId : clientId;
-  return pairwiseSubject(pairwiseSecret(), sector, userId);
+  const { scopedSubjectForClientId } = await import("@/lib/oauth/subject-vault.server");
+  return scopedSubjectForClientId(userId, clientId);
 }
 
 type Identity = { tier: Tier; humanNullifier: string | null; legalName: string | null };

@@ -18,15 +18,18 @@ export async function exchangeRefreshToken(input: { token: string; clientId: str
   // Agent grants are ephemeral: at most one hour per access token.
   const { agentTokenTtl } = await import("@/lib/agent/agent-scopes");
   const ttl = agentTokenTtl(client.accessTokenTtl, scopes);
-  const token = await signJwt({ iss: issuer(), sub: row["subject"], aud: client.clientId, iat: now, exp: now+ttl, scope: scopes.join(" "), token_use: "access", jti: crypto.randomUUID() });
+  // Re-derive the subject: rows from before the vault may hold a legacy value (even a raw id).
+  const { resolveScopedSubject } = await import("./subject-vault.server");
+  const subject = (await resolveScopedSubject(client, String(row["user_id"]))).sub;
+  const token = await signJwt({ iss: issuer(), sub: subject, aud: client.clientId, iat: now, exp: now+ttl, scope: scopes.join(" "), token_use: "access", jti: crypto.randomUUID() });
   const claims = await identityClaims(String(row["user_id"]), scopes, { handleSync: client.handleSyncEnabled, clientId: client.clientId });
-  const idToken = await signJwt({ iss: issuer(), sub: row["subject"], aud: client.clientId, iat: now, exp: now+ttl, token_use: "id",
+  const idToken = await signJwt({ iss: issuer(), sub: subject, aud: client.clientId, iat: now, exp: now+ttl, token_use: "id",
     ...(row["auth_time"] ? { auth_time: Math.floor(new Date(String(row["auth_time"])).getTime()/1000) } : {}), ...(row["acr"] ? { acr: row["acr"] } : {}), ...claims });
   // The family lock and status check are repeated when persisting the access token.
   const batch = await sql.transaction([
     sql`select pg_advisory_xact_lock(hashtextextended(${String(row["family_id"])},0))`,
     sql`insert into public.oauth_access_tokens(token_hash,client_id,user_id,subject,scopes,family_id,expires_at)
-      select ${await sha256Base64Url(token)},${client.clientId},${row["user_id"]},${row["subject"]},${scopes},${row["family_id"]},${new Date((now+ttl)*1000).toISOString()}
+      select ${await sha256Base64Url(token)},${client.clientId},${row["user_id"]},${subject},${scopes},${row["family_id"]},${new Date((now+ttl)*1000).toISOString()}
       where not exists(select 1 from public.oauth_refresh_tokens r where r.family_id=${row["family_id"]} and r.revoked_at is not null)
       returning token_hash`,
   ]);
