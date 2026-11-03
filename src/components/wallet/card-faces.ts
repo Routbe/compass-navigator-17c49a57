@@ -5,6 +5,7 @@
  */
 import qrcode from "qrcode-generator";
 import type { WalletCardPayload } from "@/lib/wallet/wallet-pass";
+import { cardMrz } from "@/lib/wallet/card-mrz";
 
 export const CARD_RATIO = 1.588;
 export const FACE_W = 640;
@@ -193,30 +194,56 @@ export async function drawCardFaces(card: WalletCardPayload & { avatarPath?: str
   drawEmblem(m, ex, ey, 34);
   m.globalCompositeOperation = "source-over";
 
-  // Back: maximum contrast for scanning, NFC mark and card number.
+  // Back: deep graphite with a white QR panel (scans like paper), NFC mark,
+  // live-code slot (drawn in 3D) and an ICAO-style machine-readable zone.
   const b = back.getContext("2d")!;
-  b.fillStyle = "#ffffff";
+  const bgB = b.createLinearGradient(0, 0, 0, FACE_H);
+  bgB.addColorStop(0, "#17171b");
+  bgB.addColorStop(1, "#0b0b0d");
+  b.fillStyle = bgB;
   b.fillRect(0, 0, FACE_W, FACE_H);
-  b.fillStyle = "#111111";
+  b.fillStyle = "#f4f4f5";
   b.font = `700 30px ui-sans-serif, system-ui, sans-serif`;
   b.fillText("ROUT", 48, 76);
-  // NFC waves
-  b.strokeStyle = "#111111";
+  b.strokeStyle = "#f4f4f5";
   b.lineWidth = 4;
   for (let i = 0; i < 3; i++) {
     b.beginPath();
     b.arc(FACE_W - 76, 66, 10 + i * 10, -Math.PI / 4, Math.PI / 4);
     b.stroke();
   }
-  const qrSize = FACE_W - 96;
-  drawQr(b, card.qrValue, 48, FACE_H * 0.2, qrSize);
+  const qrSize = FACE_W - 176;
+  const qy = Math.round(FACE_H * 0.13);
+  b.fillStyle = "#ffffff";
+  b.beginPath();
+  b.roundRect(88 - 12, qy - 12, qrSize + 24, qrSize + 24, 24);
+  b.fill();
+  drawQr(b, card.qrValue, 88, qy, qrSize);
   b.textAlign = "center";
-  b.fillStyle = "#111111";
-  fitText(b, card.url.replace(/^https?:\/\//, ""), FACE_W - 96, 28, 600);
-  b.fillText(card.url.replace(/^https?:\/\//, ""), FACE_W / 2, FACE_H * 0.2 + qrSize + 56);
-  b.font = `500 20px ui-monospace, SFMono-Regular, monospace`;
-  b.fillStyle = "#555555";
-  b.fillText(`Soeverein-ID ${card.sovereignId}`, FACE_W / 2, FACE_H - 56);
+  b.fillStyle = "#e4e4e7";
+  fitText(b, card.url.replace(/^https?:\/\//, ""), FACE_W - 96, 26, 600);
+  b.fillText(card.url.replace(/^https?:\/\//, ""), FACE_W / 2, qy + qrSize + 56);
+  // Live-code slot frame; the code itself is SDF text in the 3D card.
+  b.strokeStyle = "rgba(255,255,255,0.18)";
+  b.lineWidth = 2;
+  b.beginPath();
+  b.roundRect(48, qy + qrSize + 80, FACE_W - 96, 64, 14);
+  b.stroke();
+  b.fillStyle = "rgba(255,255,255,0.45)";
+  b.font = `600 15px ui-monospace, SFMono-Regular, monospace`;
+  b.fillText("LIVE · PROOF OF NOW", FACE_W / 2, qy + qrSize + 100);
+  // MRZ strip
+  const mrzTop = FACE_H - 150;
+  b.fillStyle = "#e9e7e1";
+  b.fillRect(0, mrzTop, FACE_W, 150);
+  b.fillStyle = "#18181b";
+  b.font = `600 26px ui-monospace, SFMono-Regular, Menlo, monospace`;
+  b.textAlign = "left";
+  const lines = cardMrz({ sovereignId: card.sovereignId, handle: card.handle, space: card.space });
+  const cw = (FACE_W - 64) / 30;
+  lines.forEach((line, row) => {
+    for (let c = 0; c < line.length; c++) b.fillText(line[c]!, 32 + c * cw, mrzTop + 42 + row * 38);
+  });
   return { front, back, mask };
 }
 
