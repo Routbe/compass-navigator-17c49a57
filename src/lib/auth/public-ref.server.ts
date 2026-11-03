@@ -80,3 +80,14 @@ export async function withPublicRef<T extends Record<string, unknown>>(row: T): 
   const id = row["id"];
   return { ...row, id: typeof id === "string" ? await sealPublicRef(id) : null } as T;
 }
+
+/**
+ * Resolves the owner a public widget asks about: a sealed reference from a public
+ * profile response, or the signed-in member's own id (Studio previews). Any other
+ * raw account id is refused, so ids cannot be probed from outside.
+ */
+export async function resolveOwnerRef(input: string, sessionUserId: string | null): Promise<string | null> {
+  if (isPublicRef(input)) return openPublicRef(input);
+  if (sessionUserId && UUID.test(input) && input.toLowerCase() === sessionUserId.toLowerCase()) return sessionUserId;
+  return null;
+}

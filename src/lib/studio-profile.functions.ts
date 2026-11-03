@@ -219,5 +219,7 @@ export const getPublicProfileByHandle = createServerFn({ method: "GET" })
     const { parseDisplayPrefs } = await import("./profile-display");
     const { redactPrivateProfile } = await import("./public-timeline");
     const prefs = parseDisplayPrefs((row as Record<string, unknown>)["display_prefs"]);
-    return redactPrivateProfile(row as Record<string, unknown>, prefs) as Record<string, Json>;
+    const { withPublicRef } = await import("@/lib/auth/public-ref.server");
+    // Visitors get a sealed reference, never the owner's internal account id.
+    return (await withPublicRef(redactPrivateProfile(row as Record<string, unknown>, prefs))) as Record<string, Json>;
   });
