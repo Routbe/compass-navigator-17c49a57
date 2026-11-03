@@ -77,7 +77,7 @@ void main() {
   float hD = texture2D(uMask, vUv - vec2(0.0, uTexel.y)).b;
   float hU = texture2D(uMask, vUv + vec2(0.0, uTexel.y)).b;
   vec3 N = normalize(vN - vT * (hR - hL) * 1.4 - vB * (hU - hD) * 1.4);
-  if (!gl_FrontFacing) N = -N;
+  N *= float(gl_FrontFacing) * 2.0 - 1.0;
 
   vec3 V = normalize(cameraPosition - vWorldPos);
   vec3 L = normalize(uLightPos - vWorldPos);
