@@ -13,7 +13,7 @@ export const LIVE_SKEW_WINDOWS = 1;
 export const LIVE_CODE_LEN = 6;
 /** Crockford base32: no I, L, O, U, so a code is easy to read aloud. */
 const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-const SERIAL = /^[0-9a-f]{16,64}$/i;
+const SERIAL = /^[\w.-]{8,128}$/;
 
 export function liveWindow(nowMs: number): number {
   return Math.floor(nowMs / 1000 / LIVE_WINDOW_S);

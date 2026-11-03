@@ -30,7 +30,7 @@ describe("card liveness", () => {
 
   it("rejects short keys and malformed serials", async () => {
     await expect(liveCode(new Uint8Array(16), serial, 1)).rejects.toThrow();
-    await expect(liveCode(key, "not-a-serial", 1)).rejects.toThrow();
+    await expect(liveCode(key, "bad serial!", 1)).rejects.toThrow();
   });
 
   it("the shader seed is not the code", async () => {
