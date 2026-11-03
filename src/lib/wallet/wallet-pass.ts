@@ -188,6 +188,8 @@ export function walletCardPayload(
   p: { handle: string; space: "root" | "alias"; displayName: string | null; tagline: string | null; themeBg: string | null; avatarSrc: string | null },
   base: string,
   sovereignId: string,
+  /** Handle-independent seed so a renamed handle keeps the same saved pass. */
+  serialSeed?: string,
 ): WalletCardPayload {
   const handle = p.handle.toLowerCase();
   // Canonical public addresses (no redirect hop when scanned): root /@handle, alias /u/handle.
@@ -195,7 +197,7 @@ export function walletCardPayload(
   const bg = p.themeBg && HEX6.test(p.themeBg) ? p.themeBg.toLowerCase() : "#111111";
   const tagline = (p.tagline ?? "").replace(/\s+/g, " ").trim();
   return {
-    serial: walletSerial({ kind: "profile", id: `${p.space}-${handle}` }),
+    serial: walletSerial({ kind: "profile", id: `${p.space}-${serialSeed ?? handle}` }),
     handle,
     space: p.space,
     displayName: clip(p.displayName?.trim() || `@${handle}`, 60),

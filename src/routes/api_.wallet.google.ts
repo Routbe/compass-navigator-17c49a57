@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 /**
- * GET /api/wallet/google?username=<handle> | ?user_id=<uuid>  [&space=root|alias]
+ * GET /api/wallet/google?username=<handle>  [&space=root|alias]
+ * Internal account ids are never accepted here: they must not be probeable from outside.
  * Returns { jwt, saveUrl } for "Add to Google Wallet". Public profile data only;
  * signing runs server-side (async WebCrypto), never on the visitor's main thread.
  * Without a configured issuer: 503 wallet_not_configured with an unsigned demo payload.
@@ -12,9 +13,11 @@ export const Route = createFileRoute("/api_/wallet/google")({
       GET: async ({ request }) => {
         const url = new URL(request.url);
         const username = url.searchParams.get("username")?.trim().replace(/^@+/, "") ?? "";
-        const userId = url.searchParams.get("user_id")?.trim() ?? "";
-        const target = userId || username;
-        if (!target || (userId && !/^[0-9a-f-]{36}$/i.test(userId)) || (!userId && !/^[\w.-]{1,100}$/.test(username))) {
+        if (url.searchParams.has("user_id")) {
+          return Response.json({ error: "user_id_not_accepted", message: "Use the public username." }, { status: 400 });
+        }
+        const target = username;
+        if (!target || !/^[\w.-]{1,100}$/.test(username)) {
           return Response.json({ error: "invalid_request" }, { status: 400 });
         }
         const { isPlatformFeatureEnabled } = await import("@/lib/platform-features.server");

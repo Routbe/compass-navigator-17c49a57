@@ -34,11 +34,25 @@ async function cardDigest(space: "root" | "alias", accountId: string, handle: st
   return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Accepts a user id (uuid) or a handle; prefers the verified root profile, then the alias. */
-export async function generateWalletPayload(userIdOrHandle: string, opts: { space?: "root" | "alias" } = {}): Promise<WalletCardPayload | null> {
+/** Stable pass serial seed: one-way from the card digest, independent of the handle. */
+async function serialSeed(digest: string): Promise<string> {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`rout-card-serial:v1:${digest}`));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 40);
+}
+
+/**
+ * Accepts a public handle. An internal account id (uuid) is only resolved when the
+ * caller is server code acting for that account (`allowAccountId`); public endpoints
+ * never accept it, so account ids cannot be probed or linked to cards.
+ */
+export async function generateWalletPayload(
+  userIdOrHandle: string,
+  opts: { space?: "root" | "alias"; allowAccountId?: boolean } = {},
+): Promise<WalletCardPayload | null> {
   let handle = userIdOrHandle.trim().replace(/^@+/, "");
   if (!handle) return null;
   if (UUID.test(handle)) {
+    if (!opts.allowAccountId) return null;
     const { sql } = await import("@/lib/neon");
     const rows = (await sql`
       select p.username as root, a.handle as alias
@@ -50,7 +64,7 @@ export async function generateWalletPayload(userIdOrHandle: string, opts: { spac
     const r = rows[0];
     const pick = opts.space === "alias" ? r?.["alias"] : (r?.["root"] ?? r?.["alias"]);
     if (typeof pick !== "string" || !pick) return null;
-    if (opts.space === undefined && !r?.["root"]) opts = { space: "alias" };
+    if (opts.space === undefined && !r?.["root"]) opts = { ...opts, space: "alias" };
     handle = pick;
   }
   const { themeOf } = await import("@/lib/profile");
@@ -66,7 +80,10 @@ export async function generateWalletPayload(userIdOrHandle: string, opts: { spac
         avatarSrc: profileImageSrc((p["avatar_url"] as string | null) ?? null),
       },
       base,
-      sovereignIdFromDigest(await cardDigest(space, String(p["id"] ?? ""), String(p["username"] ?? handle))),
+      ...(await (async () => {
+        const digest = await cardDigest(space, String(p["id"] ?? ""), String(p["username"] ?? handle));
+        return [sovereignIdFromDigest(digest), await serialSeed(digest)] as const;
+      })()),
     );
   if (opts.space !== "alias") {
     const { readPublicProfile } = await import("@/lib/studio-profile.server");
